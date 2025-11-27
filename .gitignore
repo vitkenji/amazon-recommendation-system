@@ -1,2 +1,4 @@
 .ipynb_checkpoints/
 preprocessed_data.csv
+users.gml
+products.gml
