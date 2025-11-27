@@ -1,6 +1,5 @@
 import pandas as pd
 import networkx as nx
-import json
 
 df = pd.read_csv('../dataset/subsample.csv')
 G = nx.read_gml('../network/reviews_network.gml')
