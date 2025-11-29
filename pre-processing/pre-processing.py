@@ -1,57 +1,54 @@
 import pandas as pd
+import os
 import networkx as nx
 from nltk.sentiment import SentimentIntensityAnalyzer
+from networkx.algorithms import bipartite
 
-# since initially there was 25Gb of data, the code below just demonstrates how pre-processing was executed
-# products.csv and reviews.csv were deleted.
-# dataset now is 100Mb.
+# loads reviews dataset
+os.makedirs("../dataset/reviews_chunks", exist_ok=True)
+reviews_files = []
+for i, chunk in enumerate(pd.read_json( "../dataset/reviews.jsonl",lines=True, chunksize=100_000)):
+    out_path = os.path.join("../dataset/reviews_chunks", f"reviews_chunk_{i}.parquet")
+    chunk.to_parquet(out_path)
+    reviews_files.append(out_path)
 
-# cleans products dataset, removing duplicates, rows with null values etc.
+# cleans reviews dataset
+reviews = pd.concat([pd.read_parquet(p) for p in reviews_files], ignore_index=True)
+reviews = reviews.drop(columns=['title', 'images', 'asin', 'timestamp', 'helpful_vote', 'verified_purchase'], axis=1)
+reviews = reviews.drop_duplicates()
+reviews = reviews.dropna()
 
-products = pd.read_csv('../data/products.csv')
+# loads products dataset
+chunks = []
+for chunk in pd.read_json("../dataset/products.jsonl", lines=True, chunksize=100_000):
+    chunks.append(chunk)
+
+# cleans products dataset
+products = pd.concat(chunks, ignore_index=True)
+products = products.drop(columns=['title', 'features', 'description', 'images', 'videos', 'store', 'details', 'bought_together', 'subtitle', 'author'], axis=1)
 products = products.drop_duplicates()
 products = products.dropna()
 products['main_category'] = products['main_category'].str.lower()
 products['main_category'] = products['main_category'].str.strip()
-products.to_csv('../data/products.csv', index=False)
+products['categories'] = products['categories'].str.lower()
+products['categories'] = products['categories'].str.strip()
 
-# cleans reviews dataset, removing duplicates, rows with null values etc.
-reviews = pd.read_csv('../data/reviews.csv')
-reviews = reviews.drop_duplicates()
-reviews = reviews.dropna()
+# filters reviews
+user_counts = reviews.groupby("user_id")["user_id"].transform("size")
+product_counts = reviews.groupby("parent_asin")["parent_asin"].transform("size")
+reviews_filtered = reviews[(user_counts >= 60) & (product_counts >= 1200)]
 
 # merges data and cleans it
-
-df = pd.merge(reviews,products,on='parent_asin',how='left')
+df = pd.merge(reviews_filtered,products,on='parent_asin',how='left')
 df = df.drop_duplicates()
 df = df.dropna()
 
-# selects most important nodes
-user_counts = df.groupby('user_id')['user_id'].transform('count')
-product_counts = df.groupby('parent_asin')['parent_asin'].transform('count')
-
-while True:
-    initial_rows = len(df)
-
-    df = df[df.groupby('parent_asin')['parent_asin'].transform('size') >= 40]
-    
-    df = df[df.groupby('user_id')['user_id'].transform('size') >= 8]
-
-    if len(df) == initial_rows:
-        break
-        
 # extract sentiment of text
 sent = SentimentIntensityAnalyzer()
 df[['neg', 'neu', 'pos', 'compound']] = df['text'].apply(lambda x: pd.Series(sent.polarity_scores(x)))
 df = df.drop(columns=['text'], axis=1)
 
-df = df.drop_duplicates()
-df = df.dropna()
-
-df.to_csv('../data/final_data.csv', index=False)
-
-# creates network
-
+# creates main network
 G = nx.Graph()
 
 for _, row in df.drop_duplicates(subset='parent_asin').iterrows():
@@ -78,4 +75,23 @@ for _, row in df.iterrows():
         compound=row['compound']
     )
 
-nx.write_gml(G, "../reviews_network.gml")
+# creates projections
+
+users = set()
+products = set()
+
+for node, data in G.nodes(data=True):
+    if data.get('type') == 'user':
+        users.add(node)
+    elif data.get('type') == 'product':
+        products.add(node)
+
+G_users = bipartite.projected_graph(G, nodes=users)
+G_products = bipartite.projected_graph(G, nodes=products)
+
+# exports data
+df.to_csv('../dataset/subsample.csv', index=False)
+nx.write_gml(G, "../network/reviews_network.gml")
+nx.write_gml(G_users, '../network/users.gml')
+nx.write_gml(G_products, '../network/products.gml')
+ 
