@@ -1,0 +1,14 @@
+metric,value
+precision@1,0.0
+recall@1,0.0
+precision@3,0.0
+recall@3,0.0
+precision@5,0.0
+recall@5,0.0
+precision@10,0.0
+recall@10,0.0
+precision@20,0.0
+recall@20,0.0
+precision@50,0.0
+recall@50,0.0
+AUC,0.49658939823111165
