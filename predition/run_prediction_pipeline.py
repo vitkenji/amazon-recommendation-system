@@ -25,7 +25,7 @@ CONFIG = {
     'MIN_DEGREE_FOR_REMOVAL': 5,       # grau mínimo dos nós para remoção
     'K_LIST': [1, 3, 5, 10],           # ks para métricas
     'NEGATIVE_MULTIPLIER': 3,          # negativos por positivo
-    'OUTPUT_TAG': 'testSupervised',    # se None, cria automático; caso contrário usa o fornecido
+    'OUTPUT_TAG': 'testSupervised_bestModel',    # se None, cria automático; caso contrário usa o fornecido
 
     # =====================
     # Config: método Similaridade
@@ -37,10 +37,10 @@ CONFIG = {
     # =====================
     # Config: método Supervisionado
     # =====================
-    'SUP_TOP_K': 10,
-    'SUP_NEG_TRAIN_PER_POS': 2,
-    'SUP_TEST_EXTRA': 100,
-    'SUP_FRACTION_TRAIN': 1.0,
+    'SUP_TOP_K': 5,
+    'SUP_NEG_TRAIN_PER_POS': 1,
+    'SUP_TEST_EXTRA': 50,
+    'SUP_FRACTION_TRAIN': 1.5,
     'SUP_USE_STANDARD_FILE': True,
 }
 

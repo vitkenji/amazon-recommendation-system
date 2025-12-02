@@ -114,13 +114,17 @@ available_products = set(prod_feat_df['product_id'])
 # Map rápido para usuário -> produtos positivos de treino
 user_train_pos_products = train_pos_df.groupby('user_id')['parent_asin'].apply(set).to_dict()
 
+# Map rápido para usuário -> produtos escondidos (hidden) para evitar filtrar a cada iteração
+hidden_map = hidden_df.groupby('user_id')['parent_asin'].apply(set).to_dict()
+
 # -------------------------------------------------------------
 # 4. Gerar negativos de treino
 # -------------------------------------------------------------
 neg_rows = []
 for user, pos_set in user_train_pos_products.items():
-    # Produtos candidatos para negativos: disponíveis menos os já positivos e menos hidden
-    candidates = list(available_products - pos_set)
+    # Produtos candidatos para negativos: disponíveis menos os já positivos e menos hidden do usuário
+    hidden_for_user = hidden_map.get(user, set())
+    candidates = list(available_products - pos_set - hidden_for_user)
     if not candidates:
         continue
     # Quantidade alvo de negativos para este usuário
@@ -159,6 +163,9 @@ train_df = pd.concat([train_pos_df, train_neg_df], ignore_index=True)
 # Feature same_community
 train_df['same_community'] = (train_df['user_community'] == train_df['product_community']).astype(int)
 
+# Feature de interação: preferential attachment (produto dos graus)
+train_df['deg_pa'] = train_df['user_deg'] * train_df['product_deg']
+
 # -------------------------------------------------------------
 # 6. Selecionar colunas de features
 # -------------------------------------------------------------
@@ -167,7 +174,8 @@ FEATURE_COLS = [
     'user_pagerank', 'product_pagerank',
     'user_closeness', 'product_closeness',
     'user_eig', 'product_eig',
-    'same_community'
+    'same_community',
+    'deg_pa'
 ]
 # (Para mudar features, edite FEATURE_COLS.)
 
@@ -181,7 +189,7 @@ print(f"Shape X_train: {X_train.shape} | y_train: {y_train.shape}")
 # -------------------------------------------------------------
 model = Pipeline([
     ('scaler', StandardScaler()),
-    ('clf', LogisticRegression(max_iter=1000, class_weight='balanced', random_state=CONFIG['RANDOM_SEED']))
+    ('clf', LogisticRegression(max_iter=1000, class_weight='balanced', C=0.5, random_state=CONFIG['RANDOM_SEED']))
 ])
 model.fit(X_train, y_train)
 print("Modelo treinado (LogisticRegression).")
@@ -257,6 +265,7 @@ if test_df.empty:
 
 # same_community para teste
 test_df['same_community'] = (test_df['user_community'] == test_df['product_community']).astype(int)
+test_df['deg_pa'] = test_df['user_deg'] * test_df['product_deg']
 X_test = test_df[FEATURE_COLS].values
 
 # -------------------------------------------------------------
